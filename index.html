@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Ngôi Nhà Năng Suất</title>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg: #FDFCF0; --pink: #FFB3BA; --blue: #BAE1FF; --green: #B5EAD7; --text: #5A6A82;
+        }
+        body { background-color: var(--bg); font-family: 'Quicksand', sans-serif; color: var(--text); padding: 20px; margin: 0; }
+        .container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1200px; margin: auto; }
+        .card { background: white; border-radius: 25px; padding: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.03); border: 4px solid #fff; }
+        h2 { color: var(--pink); border-bottom: 2px solid var(--bg); padding-bottom: 10px; margin-top: 0; }
+        
+        /* Task & Schedule Inputs */
+        .input-group { display: flex; gap: 10px; margin-bottom: 15px; }
+        input { border: 2px solid var(--bg); border-radius: 12px; padding: 10px; outline: none; font-family: inherit; }
+        
+        .task-item, .schedule-item { 
+            display: flex; align-items: center; background: var(--bg); 
+            padding: 10px; margin-bottom: 8px; border-radius: 12px; gap: 10px; 
+        }
+        .item-text { flex: 1; border: none; background: transparent; outline: none; color: var(--text); font-size: 16px; }
+
+        /* Calendar Grid */
+        .grid-calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-top: 15px; }
+        .day { background: #eee; padding: 10px; border-radius: 12px; text-align: center; cursor: pointer; transition: 0.3s; }
+        .day.active { background: var(--pink); color: white; font-weight: bold; }
+
+        button { background: var(--blue); border: none; padding: 10px 15px; border-radius: 12px; color: white; font-weight: bold; cursor: pointer; }
+        button:hover { opacity: 0.8; }
+        .btn-del { background: none; color: #ff9999; font-size: 20px; padding: 0; }
+        
+        .chart-box { grid-column: span 2; min-height: 300px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="card">
+        <h2>⏱️ Pomodoro</h2>
+        <div id="timer" style="font-size: 50px; font-weight: bold; margin: 15px 0;">25:00</div>
+        <button onclick="startTimer()">Bắt đầu</button>
+        <button style="background:var(--pink)" onclick="resetTimer()">Đặt lại</button>
+    </div>
+
+    <div class="card">
+        <h2>📝 Nhiệm vụ</h2>
+        <div class="input-group">
+            <input type="text" id="taskInput" placeholder="Mục tiêu hôm nay..." style="flex:1">
+            <button onclick="addTask()">Thêm</button>
+        </div>
+        <div id="taskList"></div>
+    </div>
+
+    <div class="card">
+        <h2>📅 Lịch: <span id="dayLabel">T5</span></h2>
+        <div class="input-group">
+            <input type="time" id="schedTime">
+            <input type="text" id="schedTask" placeholder="Nội dung..." style="flex:1">
+            <button onclick="addSched()">+</button>
+        </div>
+        <div id="schedList"></div>
+        <div class="grid-calendar">
+            <div class="day" onclick="setDay('T2')">T2</div>
+            <div class="day" onclick="setDay('T3')">T3</div>
+            <div class="day" onclick="setDay('T4')">T4</div>
+            <div class="day active" onclick="setDay('T5')">T5</div>
+            <div class="day" onclick="setDay('T6')">T6</div>
+            <div class="day" onclick="setDay('T7')">T7</div>
+            <div class="day" onclick="setDay('CN')">CN</div>
+        </div>
+    </div>
+
+    <div class="card chart-box">
+        <h2>📊 Đồ thị Năng suất</h2>
+        <canvas id="myChart"></canvas>
+        <button style="margin-top:20px; background:#ccc" onclick="resetAll()">Xóa hết dữ liệu</button>
+    </div>
+</div>
+
+<script>
+    // --- KHỞI TẠO DỮ LIỆU ---
+    let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+    let scheds = JSON.parse(localStorage.getItem('scheds')) || {"T2":[],"T3":[],"T4":[],"T5":[],"T6":[],"T7":[],"CN":[]};
+    let histData = JSON.parse(localStorage.getItem('histData')) || [0, 0, 0, 0, 0, 0, 0];
+    let curDay = "T5";
+
+    // --- BIỂU ĐỒ (CHART.JS) ---
+    const ctx = document.getElementById('myChart').getContext('2d');
+    let myChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'],
+            datasets: [{
+                label: 'Nhiệm vụ hoàn thành',
+                data: histData,
+                borderColor: '#FFB3BA',
+                backgroundColor: 'rgba(255, 179, 186, 0.2)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: { scales: { y: { beginAtZero: true, stepSize: 1 } } }
+    });
+
+    // --- HÀM CẬP NHẬT BIỂU ĐỒ ---
+    function updateChart() {
+        const dayMap = {"T2":0,"T3":1,"T4":2,"T5":3,"T6":4,"T7":5,"CN":6};
+        histData[dayMap[curDay]] = tasks.filter(t => t.done).length;
+        localStorage.setItem('histData', JSON.stringify(histData));
+        myChart.data.datasets[0].data = histData;
+        myChart.update();
+    }
+
+    // --- QUẢN LÝ TASK ---
+    function addTask() {
+        const val = document.getElementById('taskInput').value;
+        if(!val) return;
+        tasks.push({ text: val, done: false });
+        document.getElementById('taskInput').value = '';
+        renderTasks();
+    }
+    function renderTasks() {
+        const list = document.getElementById('taskList');
+        list.innerHTML = '';
+        tasks.forEach((t, i) => {
+            list.innerHTML += `
+                <div class="task-item">
+                    <input type="checkbox" ${t.done?'checked':''} onchange="tasks[${i}].done=!tasks[${i}].done; updateChart(); renderTasks()">
+                    <input type="text" class="item-text" value="${t.text}" onchange="tasks[${i}].text=this.value; save()">
+                    <button class="btn-del" onclick="tasks.splice(${i},1); updateChart(); renderTasks()">×</button>
+                </div>`;
+        });
+        save();
+    }
+
+    // --- QUẢN LÝ LỊCH TRÌNH ---
+    function addSched() {
+        const time = document.getElementById('schedTime').value;
+        const task = document.getElementById('schedTask').value;
+        if(!time || !task) return;
+        scheds[curDay].push({ time, task });
+        scheds[curDay].sort((a,b) => a.time.localeCompare(b.time));
+        document.getElementById('schedTask').value = '';
+        renderSched();
+    }
+    function renderSched() {
+        const list = document.getElementById('schedList');
+        list.innerHTML = '';
+        scheds[curDay].forEach((s, i) => {
+            list.innerHTML += `
+                <div class="schedule-item">
+                    <input type="time" value="${s.time}" onchange="scheds['${curDay}'][${i}].time=this.value; renderSched()">
+                    <input type="text" class="item-text" value="${s.task}" onchange="scheds['${curDay}'][${i}].task=this.value; save()">
+                    <button class="btn-del" onclick="scheds['${curDay}'].splice(${i},1); renderSched()">×</button>
+                </div>`;
+        });
+        save();
+    }
+
+    function setDay(day) {
+        curDay = day;
+        document.getElementById('dayLabel').innerText = day;
+        document.querySelectorAll('.day').forEach(d => {
+            d.classList.remove('active');
+            if(d.innerText === day) d.classList.add('active');
+        });
+        renderSched();
+        updateChart();
+    }
+
+    // --- POMODORO ---
+    let timerObj; let timeLeft = 1500;
+    function startTimer() {
+        clearInterval(timerObj);
+        timerObj = setInterval(() => {
+            if(timeLeft <= 0) { clearInterval(timerObj); alert("Hết giờ!"); }
+            else { timeLeft--; updateTime(); }
+        }, 1000);
+    }
+    function updateTime() {
+        const m = Math.floor(timeLeft/60); const s = timeLeft%60;
+        document.getElementById('timer').innerText = `${m}:${s<10?'0':''}${s}`;
+    }
+    function resetTimer() { clearInterval(timerObj); timeLeft = 1500; updateTime(); }
+
+    function save() {
+        localStorage.setItem('tasks', JSON.stringify(tasks));
+        localStorage.setItem('scheds', JSON.stringify(scheds));
+    }
+    function resetAll() { if(confirm("Xóa sạch dữ liệu?")) { localStorage.clear(); location.reload(); } }
+
+    // Chạy lần đầu
+    renderTasks();
+    renderSched();
+</script>
+</body>
+</html>
